@@ -1,4 +1,4 @@
-package com.example.openoadforandroid.fileutil.com.example.openoadforandroid.main;
+package com.example.openoadforandroid.fileutil.manager;
 
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;

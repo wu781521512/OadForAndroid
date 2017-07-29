@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/OadForAndroid.iml" filepath="$PROJECT_DIR$/OadForAndroid.iml" />
+      <module fileurl="file://$PROJECT_DIR$/OadForAndroid.iml" filepath="$PROJECT_DIR$/OadForAndroid.iml" />
       <module fileurl="file://$PROJECT_DIR$/openoadforandroid/openoadforandroid.iml" filepath="$PROJECT_DIR$/openoadforandroid/openoadforandroid.iml" />
     </modules>
   </component>

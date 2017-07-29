@@ -1,8 +1,9 @@
-package com.example.openoadforandroid.fileutil.com.example.openoadforandroid.main;
+package com.example.openoadforandroid.fileutil.manager;
 
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
+import android.bluetooth.BluetoothGattService;
 import android.content.Context;
 import android.os.AsyncTask;
 import android.os.Handler;
@@ -11,33 +12,85 @@ import android.os.Message;
 import com.example.openoadforandroid.fileutil.AssetFileLoad;
 import com.example.openoadforandroid.fileutil.BaseFileLoad;
 
+import java.util.UUID;
+
 /**
  * 主体类，使用时创建该对象，操作整个升级流程
  */
 
-public class OadManager implements BaseManager{
+public class OadManager implements BaseManager {
     private Context context;
     private BluetoothGatt gatt;
     private int fileSize;
-    private BluetoothGattCharacteristic query_cha;
-    private BluetoothGattCharacteristic update;
+    private BluetoothGattService service;
+    private BluetoothGattCharacteristic query_cha;   //查询设备版本和发送升级通知给设备的characteristic
+    private BluetoothGattCharacteristic update_cha;  //发送升级文件的characteristic
     private byte[] bytes;
+    private OadManager(){}
 
-    public OadManager(BluetoothGatt gatt, Context context) {
-        this.gatt = gatt;
-        this.context = context;
+    public OadManager getInstance(){
+        return InnerOad.manager;
+    }
+
+    private static class InnerOad{
+        public static final OadManager manager= new OadManager();
     }
 
     /**
-     * 开启或关闭notification，不设置descriptor
-     *
-     * @param characteristic 蓝牙的特征对象
-     * @param enabled        是否开启notification标识
-     */
-    public boolean setNotification(BluetoothGattCharacteristic characteristic,
-                                   boolean enabled) {
-        return setNotification(characteristic, null, enabled);
+     * 初始化升级需要使用的characteristic对象
+     * @param gatt  连接蓝牙获取到的BluetoothGatt对象
+     * @param commonService 蓝牙升级用到的服务的UUID的字符串
+     * @param queryCharacteristicStr  用于查询版本的characteristic的UUID字符串
+     * @param updateCharacteristicStr 用于发送升级文件的characteristic的UUID字符串
+     * */
+    public void initCharacteristic(BluetoothGatt gatt,String commonService,String queryCharacteristicStr ,String updateCharacteristicStr){
+        this.gatt = gatt;
+        service = gatt.getService(UUID.fromString(commonService));
+        query_cha = service.getCharacteristic(UUID.fromString(queryCharacteristicStr));
+        update_cha = service.getCharacteristic(UUID.fromString(updateCharacteristicStr));
     }
+
+    public void initCharacteristic(BluetoothGatt gatt,BluetoothGattCharacteristic query_cha ,BluetoothGattCharacteristic update_cha){
+        this.gatt = gatt;
+        this.query_cha = query_cha;
+        this.update_cha = update_cha;
+    }
+
+    /**
+     * 为查询用的characteristic设置是否开启notification （不设置Descriptor，有可能收不到回执）
+     * @param enabled true if open,false is close
+     * */
+    public boolean setQueryNotification(boolean enabled) {
+        return setNotification(query_cha,null,enabled);
+    }
+
+    /**
+     * 为查询用的characteristic设置是否开启notification 同时设置descriptor 推荐
+     * @param descriptor 要设置的Descriptor
+     * @param enabled true if open,false is close
+     * */
+    public boolean setQueryNotification(BluetoothGattDescriptor descriptor,boolean enabled) {
+        return setNotification(query_cha,descriptor,enabled);
+    }
+
+    /**
+     * 为发送升级文件用的characteristic设置是否开启notification
+     * @param enabled true if open,false is close
+     * */
+    public boolean setUpdateNotification(boolean enabled) {
+        return setNotification(update_cha,null,enabled);
+    }
+
+    /**
+     * 为发送升级文件用的characteristic设置是否开启notification 同时设置descriptor 推荐
+     * @param descriptor 要设置的Descriptor
+     * @param enabled true if open,false is close
+     * */
+    public boolean setUpdateNotification(BluetoothGattDescriptor descriptor,boolean enabled) {
+        return setNotification(update_cha,descriptor,enabled);
+    }
+
+
 
     /**
      * 开启或关闭notification
@@ -74,11 +127,16 @@ public class OadManager implements BaseManager{
                 //启动一个线程执行查询任务
                 byte[] data = new byte[1];
                 data[0] = 0;
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
                 //发送0,发送成功后，间隔200ms左右发送1.
                 query_cha.setValue(data);
                 gatt.writeCharacteristic(query_cha);
                 try {
-                    Thread.sleep(300);
+                    Thread.sleep(200);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -94,9 +152,9 @@ public class OadManager implements BaseManager{
      * 发送升级通知消息给蓝牙设备
      *
      * @param fileLoad 文件加载器，默认从asset文件夹加载，可以自定义实现
-     * @param filePath 文件路径，如果用默认的加载器 填写asset文件夹下的文件名称，不带后缀 .xxx
+     * @param filePath 文件路径，如果用默认的加载器 填写asset文件夹下的文件名称
      */
-    public boolean sendUpdateNotify(BaseFileLoad fileLoad, String filePath) {
+    private boolean sendUpdateNotify(BaseFileLoad fileLoad, String filePath) {
         BaseFileLoad baseload = fileLoad;
         if (fileLoad == null) {
             baseload = new AssetFileLoad();
@@ -153,7 +211,7 @@ public class OadManager implements BaseManager{
 
                 /**用于发送升级文件的characteristic在升级过程中会每发送一个包就回复
                  * 一次，很耽误效率，所以最好先设置成不回复消息 */
-                update.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+                update_cha.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
 
                 //这里按照demo中设定的一样16，计算一共需要发送多少个包
                 int blockNum = bytes.length / 16;
@@ -177,8 +235,8 @@ public class OadManager implements BaseManager{
                     temp[1] = (byte) (i >> 8 & 0xff);
                     //每次偏移数据部分大小，将文件数组复制到发送的包中。
                     System.arraycopy(bytes, i * 16, temp, 2, 16);
-                    update.setValue(temp);
-                    boolean b = gatt.writeCharacteristic(update);
+                    update_cha.setValue(temp);
+                    boolean b = gatt.writeCharacteristic(update_cha);
                     if (b) {
                         if (mHandler != null) {
                             //发送写入进度，arg1代表进度
