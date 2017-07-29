@@ -28,7 +28,7 @@ public class OadManager implements BaseManager {
     private byte[] bytes;
     private OadManager(){}
 
-    public OadManager getInstance(){
+    public static OadManager getInstance(){
         return InnerOad.manager;
     }
 
